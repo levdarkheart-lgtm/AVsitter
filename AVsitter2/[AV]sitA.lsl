@@ -649,17 +649,27 @@ update_current_anim_name()
         if (!has_variant)
         {
             string trimmed_name = llStringTrim(CURRENT_ANIMATION_FILENAME, STRING_TRIM_TAIL);
+            integer trimmed_length = llStringLength(trimmed_name);
             integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
             while (total--)
             {
                 string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, total);
                 if (llGetSubString(inventory_name, -1, -1) == speed_text)
                 {
-                    if (llStringTrim(llGetSubString(inventory_name, 0, -2), STRING_TRIM_TAIL) == trimmed_name)
+                    if (!llSubStringIndex(inventory_name, trimmed_name))
                     {
-                        variant_name = inventory_name;
-                        has_variant = TRUE;
-                        total = 0;
+                        integer gap = llStringLength(inventory_name) - 1 - trimmed_length;
+                        string between = "";
+                        if (gap > 0)
+                        {
+                            between = llGetSubString(inventory_name, trimmed_length, trimmed_length + gap - 1);
+                        }
+                        if (llStringTrim(between, STRING_TRIM) == "")
+                        {
+                            variant_name = inventory_name;
+                            has_variant = TRUE;
+                            total = 0;
+                        }
                     }
                 }
             }

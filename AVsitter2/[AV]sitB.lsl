@@ -114,6 +114,7 @@ integer animation_menu(integer animation_menu_function)
             menu += " [" + llList2String(llParseString2List(CURRENT_POSE_NAME, ["P:"], []), 0);
             integer has_speed_variant;
             string trimmed_animation = llStringTrim(animation_file, STRING_TRIM_TAIL);
+            integer trimmed_length = llStringLength(trimmed_animation);
             integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
             while (total--)
             {
@@ -121,10 +122,19 @@ integer animation_menu(integer animation_menu_function)
                 string suffix = llGetSubString(inventory_name, -1, -1);
                 if (suffix == "+" || suffix == "-")
                 {
-                    if (llStringTrim(llGetSubString(inventory_name, 0, -2), STRING_TRIM_TAIL) == trimmed_animation)
+                    if (!llSubStringIndex(inventory_name, trimmed_animation))
                     {
-                        has_speed_variant = TRUE;
-                        total = 0;
+                        integer gap = llStringLength(inventory_name) - 1 - trimmed_length;
+                        string between = "";
+                        if (gap > 0)
+                        {
+                            between = llGetSubString(inventory_name, trimmed_length, trimmed_length + gap - 1);
+                        }
+                        if (llStringTrim(between, STRING_TRIM) == "")
+                        {
+                            has_speed_variant = TRUE;
+                            total = 0;
+                        }
                     }
                 }
             }
