@@ -88,37 +88,6 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
-string find_speed_variant(string base_name, string suffix)
-{
-    string candidate = base_name + suffix;
-    if (llGetInventoryType(candidate) == INVENTORY_ANIMATION)
-    {
-        return candidate;
-    }
-    string trimmed = llStringTrim(base_name, STRING_TRIM_TAIL);
-    if (trimmed != base_name)
-    {
-        candidate = trimmed + suffix;
-        if (llGetInventoryType(candidate) == INVENTORY_ANIMATION)
-        {
-            return candidate;
-        }
-    }
-    integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
-    while (total--)
-    {
-        string name = llGetInventoryName(INVENTORY_ANIMATION, total);
-        if (llGetSubString(name, -1, -1) == suffix)
-        {
-            if (llStringTrim(llDeleteSubString(name, -1, -1), STRING_TRIM_TAIL) == trimmed)
-            {
-                return name;
-            }
-        }
-    }
-    return "";
-}
-
 integer NOTECARD_TARGET_BROADCAST = -1;
 integer notecard_section_channel = -1;
 
@@ -675,8 +644,27 @@ update_current_anim_name()
     string speed_text = llList2String(["", "+", "-"], speed_index);
     if (speed_text != "")
     {
-        string variant_name = find_speed_variant(CURRENT_ANIMATION_FILENAME, speed_text);
-        if (variant_name != "")
+        string variant_name = CURRENT_ANIMATION_FILENAME + speed_text;
+        integer has_variant = llGetInventoryType(variant_name) == INVENTORY_ANIMATION;
+        if (!has_variant)
+        {
+            string trimmed_name = llStringTrim(CURRENT_ANIMATION_FILENAME, STRING_TRIM_TAIL);
+            integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
+            while (total--)
+            {
+                string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, total);
+                if (llGetSubString(inventory_name, -1, -1) == speed_text)
+                {
+                    if (llStringTrim(llGetSubString(inventory_name, 0, -2), STRING_TRIM_TAIL) == trimmed_name)
+                    {
+                        variant_name = inventory_name;
+                        has_variant = TRUE;
+                        total = 0;
+                    }
+                }
+            }
+        }
+        if (has_variant)
         {
             CURRENT_ANIMATION_FILENAME = variant_name;
         }

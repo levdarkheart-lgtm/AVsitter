@@ -53,25 +53,6 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
-integer animation_has_speed_variant(string base_name)
-{
-    string trimmed = llStringTrim(base_name, STRING_TRIM_TAIL);
-    integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
-    while (total--)
-    {
-        string name = llGetInventoryName(INVENTORY_ANIMATION, total);
-        string suffix = llGetSubString(name, -1, -1);
-        if (suffix == "+" || suffix == "-")
-        {
-            if (llStringTrim(llDeleteSubString(name, -1, -1), STRING_TRIM_TAIL) == trimmed)
-            {
-                return TRUE;
-            }
-        }
-    }
-    return FALSE;
-}
-
 Out(integer level, string out)
 {
     if (verbose >= level)
@@ -131,7 +112,22 @@ integer animation_menu(integer animation_menu_function)
         {
             CURRENT_POSE_NAME = llList2String(MENU_LIST, ANIM_INDEX);
             menu += " [" + llList2String(llParseString2List(CURRENT_POSE_NAME, ["P:"], []), 0);
-            integer has_speed_variant = animation_has_speed_variant(animation_file);
+            integer has_speed_variant;
+            string trimmed_animation = llStringTrim(animation_file, STRING_TRIM_TAIL);
+            integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
+            while (total--)
+            {
+                string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, total);
+                string suffix = llGetSubString(inventory_name, -1, -1);
+                if (suffix == "+" || suffix == "-")
+                {
+                    if (llStringTrim(llGetSubString(inventory_name, 0, -2), STRING_TRIM_TAIL) == trimmed_animation)
+                    {
+                        has_speed_variant = TRUE;
+                        total = 0;
+                    }
+                }
+            }
             if (has_speed_variant)
             {
                 if (speed_index < 0)
