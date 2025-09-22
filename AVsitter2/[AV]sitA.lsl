@@ -106,36 +106,34 @@ string find_speed_variant_in_inventory(string base_name, integer base_trimmed, s
     {
         string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, idx);
         ++idx;
-        if (llGetSubString(inventory_name, -1, -1) != suffix)
+        if (llGetSubString(inventory_name, -1, -1) == suffix)
         {
-            continue;
-        }
-        integer compare_trim = llStringLength(inventory_name) - 1;
-        while (compare_trim > 0 && llGetSubString(inventory_name, compare_trim - 1, compare_trim - 1) == " ")
-        {
-            --compare_trim;
-        }
-        if (compare_trim != base_trimmed)
-        {
-            continue;
-        }
-        integer compare_index;
-        integer mismatch;
-        while (compare_index < base_trimmed)
-        {
-            if (llGetSubString(base_name, compare_index, compare_index) != llGetSubString(inventory_name, compare_index, compare_index))
+            integer compare_trim = llStringLength(inventory_name) - 1;
+            while (compare_trim > 0 && llGetSubString(inventory_name, compare_trim - 1, compare_trim - 1) == " ")
             {
-                mismatch = TRUE;
-                compare_index = base_trimmed;
+                --compare_trim;
             }
-            else
+            if (compare_trim == base_trimmed)
             {
-                ++compare_index;
+                integer compare_index;
+                integer mismatch;
+                while (compare_index < base_trimmed)
+                {
+                    if (llGetSubString(base_name, compare_index, compare_index) != llGetSubString(inventory_name, compare_index, compare_index))
+                    {
+                        mismatch = TRUE;
+                        compare_index = base_trimmed;
+                    }
+                    else
+                    {
+                        ++compare_index;
+                    }
+                }
+                if (!mismatch)
+                {
+                    return inventory_name;
+                }
             }
-        }
-        if (!mismatch)
-        {
-            return inventory_name;
         }
     }
     return "";
