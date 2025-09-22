@@ -640,45 +640,91 @@ set_sittarget()
 update_current_anim_name()
 {
     list SEQUENCE = llParseStringKeepNulls(CURRENT_ANIMATION_SEQUENCE, [SEP], []);
-    CURRENT_ANIMATION_FILENAME = llList2String(SEQUENCE, SEQUENCE_POINTER);
+    string base_animation = llList2String(SEQUENCE, SEQUENCE_POINTER);
+    CURRENT_ANIMATION_FILENAME = base_animation;
     string speed_text = llList2String(["", "+", "-"], speed_index);
+    integer soft_available = llGetInventoryType(base_animation + "-") == INVENTORY_ANIMATION;
+    integer hard_available = llGetInventoryType(base_animation + "+") == INVENTORY_ANIMATION;
+    string variant_name = base_animation;
+    integer has_variant;
     if (speed_text != "")
     {
-        string variant_name = CURRENT_ANIMATION_FILENAME + speed_text;
-        integer has_variant = llGetInventoryType(variant_name) == INVENTORY_ANIMATION;
-        if (!has_variant)
+        variant_name = base_animation + speed_text;
+        has_variant = (speed_text == "+" ? hard_available : soft_available);
+    }
+    integer needs_soft = !soft_available;
+    integer needs_hard = !hard_available;
+    if (speed_text == "-")
+    {
+        needs_soft = !has_variant;
+    }
+    else if (speed_text == "+")
+    {
+        needs_hard = !has_variant;
+    }
+    if (needs_soft || needs_hard)
+    {
+        string trimmed_name = llStringTrim(base_animation, STRING_TRIM_TAIL);
+        integer trimmed_length = llStringLength(trimmed_name);
+        if (trimmed_length)
         {
-            string trimmed_name = llStringTrim(CURRENT_ANIMATION_FILENAME, STRING_TRIM_TAIL);
-            integer trimmed_length = llStringLength(trimmed_name);
             integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
             while (total--)
             {
                 string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, total);
-                if (llGetSubString(inventory_name, -1, -1) == speed_text)
+                string suffix = llGetSubString(inventory_name, -1, -1);
+                if (suffix == "+" || suffix == "-")
                 {
                     if (!llSubStringIndex(inventory_name, trimmed_name))
                     {
+                        integer match = TRUE;
                         integer gap = llStringLength(inventory_name) - 1 - trimmed_length;
-                        string between = "";
                         if (gap > 0)
                         {
-                            between = llGetSubString(inventory_name, trimmed_length, trimmed_length + gap - 1);
+                            string between = llGetSubString(inventory_name, trimmed_length, trimmed_length + gap - 1);
+                            if (llStringTrim(between, STRING_TRIM) != "")
+                            {
+                                match = FALSE;
+                            }
                         }
-                        if (llStringTrim(between, STRING_TRIM) == "")
+                        if (match)
                         {
-                            variant_name = inventory_name;
-                            has_variant = TRUE;
-                            total = 0;
+                            if (suffix == "+")
+                            {
+                                hard_available = TRUE;
+                                needs_hard = FALSE;
+                                if (speed_text == "+" && !has_variant)
+                                {
+                                    variant_name = inventory_name;
+                                    has_variant = TRUE;
+                                }
+                            }
+                            else
+                            {
+                                soft_available = TRUE;
+                                needs_soft = FALSE;
+                                if (speed_text == "-" && !has_variant)
+                                {
+                                    variant_name = inventory_name;
+                                    has_variant = TRUE;
+                                }
+                            }
+                            if (!needs_soft && !needs_hard && (speed_text == "" || has_variant))
+                            {
+                                total = 0;
+                            }
                         }
                     }
                 }
             }
         }
-        if (has_variant)
-        {
-            CURRENT_ANIMATION_FILENAME = variant_name;
-        }
     }
+    if (speed_text != "" && has_variant)
+    {
+        CURRENT_ANIMATION_FILENAME = variant_name;
+    }
+    integer available_flags = (soft_available != FALSE) | ((hard_available != FALSE) << 1);
+    llMessageLinked(LINK_THIS, 90303, (string)SCRIPT_CHANNEL, (key)((string)available_flags));
     llSetTimerEvent((float)llList2String(SEQUENCE, SEQUENCE_POINTER + 1));
 }
 

@@ -50,6 +50,7 @@ key CONTROLLER;
 string RLVDesignations;
 string onSit;
 integer speed_index;
+integer available_speed_variants;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
@@ -68,6 +69,10 @@ list order_buttons(list buttons)
 
 send_anim_info(integer broadcast)
 {
+    if (broadcast)
+    {
+        available_speed_variants = 0;
+    }
     llMessageLinked(LINK_THIS, 90055, (string)SCRIPT_CHANNEL, llDumpList2String([llList2String(MENU_LIST, ANIM_INDEX), llList2String(DATA_LIST, ANIM_INDEX), llList2String(POS_ROT_LIST, ANIM_INDEX * 2), llList2String(POS_ROT_LIST, ANIM_INDEX * 2 + 1), broadcast, speed_index], "|"));
 }
 
@@ -105,46 +110,21 @@ integer animation_menu(integer animation_menu_function)
         {
             menu += "[Sitter " + (string)SCRIPT_CHANNEL + "]";
         }
-        list data_entry = llParseStringKeepNulls(llList2String(DATA_LIST, ANIM_INDEX), [SEP], []);
-        string animation_file = llList2String(data_entry, 0);
         string CURRENT_POSE_NAME;
         if (FIRST_INDEX != -1)
         {
             CURRENT_POSE_NAME = llList2String(MENU_LIST, ANIM_INDEX);
             menu += " [" + llList2String(llParseString2List(CURRENT_POSE_NAME, ["P:"], []), 0);
-            integer has_speed_variant;
-            string trimmed_animation = llStringTrim(animation_file, STRING_TRIM_TAIL);
-            integer trimmed_length = llStringLength(trimmed_animation);
-            integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
-            while (total--)
+            if (speed_index < 0)
             {
-                string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, total);
-                string suffix = llGetSubString(inventory_name, -1, -1);
-                if (suffix == "+" || suffix == "-")
-                {
-                    if (!llSubStringIndex(inventory_name, trimmed_animation))
-                    {
-                        integer gap = llStringLength(inventory_name) - 1 - trimmed_length;
-                        string between = "";
-                        if (gap > 0)
-                        {
-                            between = llGetSubString(inventory_name, trimmed_length, trimmed_length + gap - 1);
-                        }
-                        if (llStringTrim(between, STRING_TRIM) == "")
-                        {
-                            has_speed_variant = TRUE;
-                            total = 0;
-                        }
-                    }
-                }
-            }
-            if (has_speed_variant)
-            {
-                if (speed_index < 0)
+                if (available_speed_variants & 1)
                 {
                     menu += ", Soft";
                 }
-                else if (speed_index > 0)
+            }
+            else if (speed_index > 0)
+            {
+                if (available_speed_variants & 2)
                 {
                     menu += ", Hard";
                 }
@@ -395,6 +375,7 @@ default
             if (llGetAgentSize(llGetLinkKey(llGetNumberOfPrims())) == ZERO_VECTOR)
             {
                 speed_index = 0;
+                available_speed_variants = 0;
                 if (!OLD_HELPER_METHOD)
                 {
                     helper_mode = FALSE;
@@ -664,6 +645,11 @@ default
                 RLVDesignations = llList2String(data, 13);
                 onSit = llList2String(data, 14);
                 memory();
+                return;
+            }
+            if (num == 90303)
+            {
+                available_speed_variants = (integer)((string)id);
                 return;
             }
             // LSL::
