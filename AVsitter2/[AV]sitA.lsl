@@ -637,13 +637,22 @@ set_sittarget()
     }
 }
 
+integer trimmed_tail_length(string text, integer last_index)
+{
+    while (last_index >= 0 && llGetSubString(text, last_index, last_index) == " ")
+    {
+        --last_index;
+    }
+    return last_index + 1;
+}
+
 string find_speed_variant(string base_name, string speed_text)
 {
     if (speed_text == "")
     {
         return base_name;
     }
-    string trimmed_base = llStringTrim(base_name, STRING_TRIM_TAIL);
+    integer trimmed_base_length = trimmed_tail_length(base_name, llStringLength(base_name) - 1);
     integer anim_count = llGetInventoryNumber(INVENTORY_ANIMATION);
     integer i;
     for (i = 0; i < anim_count; ++i)
@@ -652,15 +661,22 @@ string find_speed_variant(string base_name, string speed_text)
         integer candidate_length = llStringLength(candidate);
         if (candidate_length && llGetSubString(candidate, candidate_length - 1, candidate_length - 1) == speed_text)
         {
-            string candidate_base = "";
-            if (candidate_length > 1)
+            integer candidate_trimmed_length = trimmed_tail_length(candidate, candidate_length - 2);
+            if (candidate_trimmed_length == trimmed_base_length)
             {
-                candidate_base = llGetSubString(candidate, 0, candidate_length - 2);
-            }
-            candidate_base = llStringTrim(candidate_base, STRING_TRIM_TAIL);
-            if (candidate_base == trimmed_base)
-            {
-                return candidate;
+                integer char_index;
+                integer matches = TRUE;
+                for (char_index = 0; matches && char_index < trimmed_base_length; ++char_index)
+                {
+                    if (llGetSubString(candidate, char_index, char_index) != llGetSubString(base_name, char_index, char_index))
+                    {
+                        matches = FALSE;
+                    }
+                }
+                if (matches)
+                {
+                    return candidate;
+                }
             }
         }
     }
