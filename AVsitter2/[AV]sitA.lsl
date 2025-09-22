@@ -88,51 +88,31 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
-integer trimmed_length(string value)
+string find_speed_variant(string base_name, string suffix)
 {
-    integer length = llStringLength(value);
-    while (length > 0 && llGetSubString(value, length - 1, length - 1) == " ")
+    string candidate = base_name + suffix;
+    if (llGetInventoryType(candidate) == INVENTORY_ANIMATION)
     {
-        --length;
+        return candidate;
     }
-    return length;
-}
-
-string find_speed_variant_in_inventory(string base_name, integer base_trimmed, string suffix)
-{
-    integer anim_total = llGetInventoryNumber(INVENTORY_ANIMATION);
-    integer idx;
-    while (idx < anim_total)
+    string trimmed = llStringTrim(base_name, STRING_TRIM_TAIL);
+    if (trimmed != base_name)
     {
-        string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, idx);
-        ++idx;
-        if (llGetSubString(inventory_name, -1, -1) == suffix)
+        candidate = trimmed + suffix;
+        if (llGetInventoryType(candidate) == INVENTORY_ANIMATION)
         {
-            integer compare_trim = llStringLength(inventory_name) - 1;
-            while (compare_trim > 0 && llGetSubString(inventory_name, compare_trim - 1, compare_trim - 1) == " ")
+            return candidate;
+        }
+    }
+    integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
+    while (total--)
+    {
+        string name = llGetInventoryName(INVENTORY_ANIMATION, total);
+        if (llGetSubString(name, -1, -1) == suffix)
+        {
+            if (llStringTrim(llDeleteSubString(name, -1, -1), STRING_TRIM_TAIL) == trimmed)
             {
-                --compare_trim;
-            }
-            if (compare_trim == base_trimmed)
-            {
-                integer compare_index;
-                integer mismatch;
-                while (compare_index < base_trimmed)
-                {
-                    if (llGetSubString(base_name, compare_index, compare_index) != llGetSubString(inventory_name, compare_index, compare_index))
-                    {
-                        mismatch = TRUE;
-                        compare_index = base_trimmed;
-                    }
-                    else
-                    {
-                        ++compare_index;
-                    }
-                }
-                if (!mismatch)
-                {
-                    return inventory_name;
-                }
+                return name;
             }
         }
     }
@@ -695,33 +675,8 @@ update_current_anim_name()
     string speed_text = llList2String(["", "+", "-"], speed_index);
     if (speed_text != "")
     {
-        string base_name = CURRENT_ANIMATION_FILENAME;
-        string variant_name = base_name + speed_text;
-        if (llGetInventoryType(variant_name) != INVENTORY_ANIMATION)
-        {
-            integer base_length = llStringLength(base_name);
-            integer base_trimmed = trimmed_length(base_name);
-            if (base_trimmed != base_length)
-            {
-                if (base_trimmed > 0)
-                {
-                    variant_name = llGetSubString(base_name, 0, base_trimmed - 1) + speed_text;
-                }
-                else
-                {
-                    variant_name = speed_text;
-                }
-            }
-            if (llGetInventoryType(variant_name) != INVENTORY_ANIMATION)
-            {
-                string inventory_variant = find_speed_variant_in_inventory(base_name, base_trimmed, speed_text);
-                if (inventory_variant != "")
-                {
-                    variant_name = inventory_variant;
-                }
-            }
-        }
-        if (llGetInventoryType(variant_name) == INVENTORY_ANIMATION)
+        string variant_name = find_speed_variant(CURRENT_ANIMATION_FILENAME, speed_text);
+        if (variant_name != "")
         {
             CURRENT_ANIMATION_FILENAME = variant_name;
         }

@@ -53,86 +53,23 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
-integer trimmed_length(string value)
+integer animation_has_speed_variant(string base_name)
 {
-    integer length = llStringLength(value);
-    while (length > 0 && llGetSubString(value, length - 1, length - 1) == " ")
+    string trimmed = llStringTrim(base_name, STRING_TRIM_TAIL);
+    integer total = llGetInventoryNumber(INVENTORY_ANIMATION);
+    while (total--)
     {
-        --length;
-    }
-    return length;
-}
-
-integer speed_variant_exists_with_suffix(string base_name, integer base_trimmed, integer base_length, string suffix)
-{
-    string candidate = base_name + suffix;
-    if (llGetInventoryType(candidate) == INVENTORY_ANIMATION)
-    {
-        return TRUE;
-    }
-    if (base_trimmed != base_length)
-    {
-        if (base_trimmed > 0)
+        string name = llGetInventoryName(INVENTORY_ANIMATION, total);
+        string suffix = llGetSubString(name, -1, -1);
+        if (suffix == "+" || suffix == "-")
         {
-            candidate = llGetSubString(base_name, 0, base_trimmed - 1) + suffix;
-        }
-        else
-        {
-            candidate = suffix;
-        }
-        if (llGetInventoryType(candidate) == INVENTORY_ANIMATION)
-        {
-            return TRUE;
-        }
-    }
-    integer anim_total = llGetInventoryNumber(INVENTORY_ANIMATION);
-    integer idx;
-    while (idx < anim_total)
-    {
-        string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, idx);
-        ++idx;
-        if (llGetSubString(inventory_name, -1, -1) == suffix)
-        {
-            integer compare_trim = llStringLength(inventory_name) - 1;
-            while (compare_trim > 0 && llGetSubString(inventory_name, compare_trim - 1, compare_trim - 1) == " ")
+            if (llStringTrim(llDeleteSubString(name, -1, -1), STRING_TRIM_TAIL) == trimmed)
             {
-                --compare_trim;
-            }
-            if (compare_trim == base_trimmed)
-            {
-                integer compare_index;
-                integer mismatch;
-                while (compare_index < base_trimmed)
-                {
-                    if (llGetSubString(base_name, compare_index, compare_index) != llGetSubString(inventory_name, compare_index, compare_index))
-                    {
-                        mismatch = TRUE;
-                        compare_index = base_trimmed;
-                    }
-                    else
-                    {
-                        ++compare_index;
-                    }
-                }
-                if (!mismatch)
-                {
-                    return TRUE;
-                }
+                return TRUE;
             }
         }
     }
     return FALSE;
-}
-
-integer animation_has_speed_variant(string base_name)
-{
-    integer base_length = llStringLength(base_name);
-    integer base_trimmed = trimmed_length(base_name);
-    if (speed_variant_exists_with_suffix(base_name, base_trimmed, base_length, "+"))
-    {
-        return TRUE;
-    }
-    return speed_variant_exists_with_suffix(base_name, base_trimmed, base_length, "-");
 }
 
 Out(integer level, string out)
