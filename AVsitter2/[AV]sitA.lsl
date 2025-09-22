@@ -86,6 +86,7 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
+integer NOTECARD_TARGET_BROADCAST = -1;
 integer notecard_section_channel = -1;
 
 integer MSG_NOTECARD_LINE = 90310;
@@ -184,7 +185,7 @@ integer process_notecard_line(string raw_data)
     {
         notecard_section_channel = (integer)part0;
     }
-    integer forward_target = -1;
+    integer forward_target = NOTECARD_TARGET_BROADCAST;
     integer section_line = FALSE;
     if (llGetSubString(data, 0, 0) == "{")
     {
@@ -950,7 +951,7 @@ default
         list data;
         if (num == MSG_NOTECARD_LINE)
         {
-            if (!is_notecard_loader && (two == -1 || two == SCRIPT_CHANNEL))
+            if (!is_notecard_loader && (two == NOTECARD_TARGET_BROADCAST || two == SCRIPT_CHANNEL))
             {
                 process_notecard_line(msg);
             }
