@@ -642,9 +642,35 @@ update_current_anim_name()
     list SEQUENCE = llParseStringKeepNulls(CURRENT_ANIMATION_SEQUENCE, [SEP], []);
     CURRENT_ANIMATION_FILENAME = llList2String(SEQUENCE, SEQUENCE_POINTER);
     string speed_text = llList2String(["", "+", "-"], speed_index);
-    if (llGetInventoryType(CURRENT_ANIMATION_FILENAME + speed_text) == INVENTORY_ANIMATION)
+    if (speed_text != "")
     {
-        CURRENT_ANIMATION_FILENAME += speed_text;
+        string trimmed_name = llStringTrim(CURRENT_ANIMATION_FILENAME, STRING_TRIM_TAIL);
+        string variant_name = trimmed_name + speed_text;
+        if (llGetInventoryType(variant_name) != INVENTORY_ANIMATION)
+        {
+            integer anim_total = llGetInventoryNumber(INVENTORY_ANIMATION);
+            integer variant_index;
+            while (variant_index < anim_total)
+            {
+                string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, variant_index);
+                ++variant_index;
+                if (llGetSubString(inventory_name, -1, -1) == speed_text)
+                {
+                    string inventory_base = llStringTrim(llGetSubString(inventory_name, 0, -2), STRING_TRIM_TAIL);
+                    if (inventory_base == trimmed_name)
+                    {
+                        variant_name = inventory_name;
+                        jump speed_variant_found;
+                    }
+                }
+            }
+            variant_name = CURRENT_ANIMATION_FILENAME + speed_text;
+        }
+@speed_variant_found;
+        if (llGetInventoryType(variant_name) == INVENTORY_ANIMATION)
+        {
+            CURRENT_ANIMATION_FILENAME = variant_name;
+        }
     }
     llSetTimerEvent((float)llList2String(SEQUENCE, SEQUENCE_POINTER + 1));
 }

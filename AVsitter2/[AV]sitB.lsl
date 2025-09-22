@@ -112,7 +112,37 @@ integer animation_menu(integer animation_menu_function)
         {
             CURRENT_POSE_NAME = llList2String(MENU_LIST, ANIM_INDEX);
             menu += " [" + llList2String(llParseString2List(CURRENT_POSE_NAME, ["P:"], []), 0);
-            if (llGetInventoryType(animation_file + "+") == INVENTORY_ANIMATION)
+            integer has_speed_variant;
+            string trimmed_animation = llStringTrim(animation_file, STRING_TRIM_TAIL);
+            string variant_name = animation_file + "+";
+            if (llGetInventoryType(variant_name) != INVENTORY_ANIMATION)
+            {
+                variant_name = trimmed_animation + "+";
+                if (llGetInventoryType(variant_name) != INVENTORY_ANIMATION)
+                {
+                    integer anim_total = llGetInventoryNumber(INVENTORY_ANIMATION);
+                    integer variant_index;
+                    while (variant_index < anim_total)
+                    {
+                        string inventory_name = llGetInventoryName(INVENTORY_ANIMATION, variant_index);
+                        ++variant_index;
+                        string suffix = llGetSubString(inventory_name, -1, -1);
+                        if (suffix == "+" || suffix == "-")
+                        {
+                            string inventory_base = llStringTrim(llGetSubString(inventory_name, 0, -2), STRING_TRIM_TAIL);
+                            if (inventory_base == trimmed_animation)
+                            {
+                                has_speed_variant = TRUE;
+                                jump has_speed_variant_done;
+                            }
+                        }
+                    }
+                    jump has_speed_variant_done;
+                }
+            }
+            has_speed_variant = TRUE;
+@has_speed_variant_done;
+            if (has_speed_variant)
             {
                 if (speed_index < 0)
                 {
