@@ -93,9 +93,6 @@ string LINKSET_MASTER_KEY = "avsitter_avpos:keys";
 integer MSG_DEBUG_LINKSET_DATA = 90350;
 integer MSG_CLEAR_LINKSET_DATA = 90351;
 integer linkset_debug_enabled = TRUE;
-list linkset_registered_keys;
-list linkset_button_counters;
-list linkset_position_counters;
 
 integer NOTECARD_TARGET_BROADCAST = -1;
 integer notecard_section_channel = -1;
@@ -124,10 +121,18 @@ LinksetDataLog(string message)
 
 register_linkset_key(string key_name)
 {
-    if (llListFindList(linkset_registered_keys, [key_name]) == -1)
+    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
+    if (serialized == "")
     {
-        linkset_registered_keys += key_name;
-        llLinksetDataWrite(LINKSET_MASTER_KEY, llDumpList2String(linkset_registered_keys, "|"));
+        llLinksetDataWrite(LINKSET_MASTER_KEY, key_name);
+        LinksetDataLog("Registered key " + key_name);
+        return;
+    }
+    string haystack = "|" + serialized + "|";
+    string needle = "|" + key_name + "|";
+    if (llSubStringIndex(haystack, needle) == -1)
+    {
+        llLinksetDataWrite(LINKSET_MASTER_KEY, serialized + "|" + key_name);
         LinksetDataLog("Registered key " + key_name);
     }
 }
@@ -159,9 +164,6 @@ initialize_linkset_data_storage()
         }
     }
     llLinksetDataDelete(LINKSET_MASTER_KEY);
-    linkset_registered_keys = [];
-    linkset_button_counters = [];
-    linkset_position_counters = [];
     LinksetDataLog("Linkset data storage initialized.");
 }
 
@@ -179,42 +181,15 @@ store_initial_linkset_metadata()
     store_global_linkset_value("MEMORY_SCRIPT", memoryscript);
 }
 
-integer get_next_button_index(integer channel)
+integer get_next_entry_index(integer channel, string type_name)
 {
-    integer length = llGetListLength(linkset_button_counters);
-    integer idx;
-    while (idx < length)
+    string key_name = LINKSET_DATA_PREFIX + "channel:" + (string)channel + ":" + type_name + "_count";
+    string raw_count = llLinksetDataRead(key_name);
+    if (raw_count == "")
     {
-        if ((integer)llList2Integer(linkset_button_counters, idx) == channel)
-        {
-            integer count = llList2Integer(linkset_button_counters, idx + 1);
-            linkset_button_counters = llListReplaceList(linkset_button_counters, [channel, count + 1], idx, idx + 1);
-            return count;
-        }
-        idx += 2;
+        return 0;
     }
-    linkset_button_counters += channel;
-    linkset_button_counters += 1;
-    return 0;
-}
-
-integer get_next_position_index(integer channel)
-{
-    integer length = llGetListLength(linkset_position_counters);
-    integer idx;
-    while (idx < length)
-    {
-        if ((integer)llList2Integer(linkset_position_counters, idx) == channel)
-        {
-            integer count = llList2Integer(linkset_position_counters, idx + 1);
-            linkset_position_counters = llListReplaceList(linkset_position_counters, [channel, count + 1], idx, idx + 1);
-            return count;
-        }
-        idx += 2;
-    }
-    linkset_position_counters += channel;
-    linkset_position_counters += 1;
-    return 0;
+    return (integer)raw_count;
 }
 
 store_channel_counter(integer channel, string type_name, integer count)
@@ -224,7 +199,7 @@ store_channel_counter(integer channel, string type_name, integer count)
 
 store_button_entry(integer channel, string entry_type, string label, string data)
 {
-    integer index = get_next_button_index(channel);
+    integer index = get_next_entry_index(channel, "button");
     string key_name = LINKSET_DATA_PREFIX + "channel:" + (string)channel + ":button:" + (string)index;
     store_linkset_value(key_name, entry_type + "|" + label + "|" + data);
     store_channel_counter(channel, "button", index + 1);
@@ -232,7 +207,7 @@ store_button_entry(integer channel, string entry_type, string label, string data
 
 store_position_entry(integer channel, string pose_name, string pos, string rot)
 {
-    integer index = get_next_position_index(channel);
+    integer index = get_next_entry_index(channel, "pos");
     string key_name = LINKSET_DATA_PREFIX + "channel:" + (string)channel + ":pos:" + (string)index;
     store_linkset_value(key_name, pose_name + "|" + pos + "|" + rot);
     store_channel_counter(channel, "pos", index + 1);
