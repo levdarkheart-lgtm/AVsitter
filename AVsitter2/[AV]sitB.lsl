@@ -53,10 +53,22 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
-string LINKSET_REGISTRY_COUNT_KEY = "avsitter_avpos:registry_count";
-string LINKSET_REGISTRY_ENTRY_PREFIX = "avsitter_avpos:registry_entry:";
-integer MSG_DEBUG_LINKSET_DATA = 90350;
-integer MSG_CLEAR_LINKSET_DATA = 90351;
+integer MSG_LINKSET_DEBUG_DUMP = 90350;
+integer MSG_LINKSET_CLEAR = 90351;
+integer MSG_LINKSET_STORE_GLOBAL = 90352;
+integer MSG_LINKSET_STORE_BUTTON = 90353;
+integer MSG_LINKSET_STORE_POSITION = 90354;
+integer MSG_LINKSET_STORE_SITTER = 90355;
+string LINKSET_MESSAGE_SEPARATOR = "¦";
+string LINKSET_GLOBAL_PREFIX = "avsitter_avpos:g:";
+string LINKSET_GLOBAL_LIST_KEY = "avsitter_avpos:globals";
+string LINKSET_CHANNEL_PREFIX = "avsitter_avpos:c:";
+string LINKSET_CHANNEL_LIST_KEY = "avsitter_avpos:channels";
+string LINKSET_BUTTON_COUNT_SUFFIX = ":button_count";
+string LINKSET_BUTTON_PREFIX = ":button:";
+string LINKSET_POS_COUNT_SUFFIX = ":pos_count";
+string LINKSET_POS_PREFIX = ":pos:";
+string LINKSET_SITTER_SUFFIX = ":info";
 integer linkset_debug_enabled = TRUE;
 
 Out(integer level, string out)
@@ -75,44 +87,230 @@ LinksetDataLog(string message)
     }
 }
 
-string build_registry_entry_key(integer index)
+string build_channel_key(integer channel, string suffix)
 {
-    return LINKSET_REGISTRY_ENTRY_PREFIX + (string)index;
+    return LINKSET_CHANNEL_PREFIX + (string)channel + suffix;
+}
+
+add_list_entry(string list_key, string entry)
+{
+    string existing = llLinksetDataRead(list_key);
+    if (existing == "")
+    {
+        llLinksetDataWrite(list_key, entry);
+        LinksetDataLog("Set list " + list_key + " = " + entry);
+        return;
+    }
+    string search = "|" + existing + "|";
+    if (llSubStringIndex(search, "|" + entry + "|") == -1)
+    {
+        llLinksetDataWrite(list_key, existing + "|" + entry);
+        LinksetDataLog("Appended " + entry + " to " + list_key);
+    }
+}
+
+ensure_channel_entry(integer channel)
+{
+    add_list_entry(LINKSET_CHANNEL_LIST_KEY, (string)channel);
+}
+
+ensure_global_entry(string field)
+{
+    add_list_entry(LINKSET_GLOBAL_LIST_KEY, field);
+}
+
+store_linkset_global(string field, string value)
+{
+    ensure_global_entry(field);
+    llLinksetDataWrite(LINKSET_GLOBAL_PREFIX + field, value);
+    LinksetDataLog("Global " + field + " = " + value);
+}
+
+store_linkset_sitter(integer channel, string value)
+{
+    ensure_channel_entry(channel);
+    string key = build_channel_key(channel, LINKSET_SITTER_SUFFIX);
+    llLinksetDataWrite(key, value);
+    LinksetDataLog("Sitter " + (string)channel + " info stored");
+}
+
+store_linkset_button(integer channel, string command, string label, string data)
+{
+    ensure_channel_entry(channel);
+    string count_key = build_channel_key(channel, LINKSET_BUTTON_COUNT_SUFFIX);
+    integer count = (integer)llLinksetDataRead(count_key);
+    string entry_key = build_channel_key(channel, LINKSET_BUTTON_PREFIX + (string)count);
+    llLinksetDataWrite(entry_key, command + "|" + label + "|" + data);
+    llLinksetDataWrite(count_key, (string)(count + 1));
+    LinksetDataLog("Button " + entry_key + " stored");
+}
+
+store_linkset_position(integer channel, string pose_name, string pos, string rot)
+{
+    ensure_channel_entry(channel);
+    string count_key = build_channel_key(channel, LINKSET_POS_COUNT_SUFFIX);
+    integer count = (integer)llLinksetDataRead(count_key);
+    string entry_key = build_channel_key(channel, LINKSET_POS_PREFIX + (string)count);
+    llLinksetDataWrite(entry_key, pose_name + "|" + pos + "|" + rot);
+    llLinksetDataWrite(count_key, (string)(count + 1));
+    LinksetDataLog("Position " + entry_key + " stored");
+}
+
+clear_channel_entries(integer channel)
+{
+    string count_key = build_channel_key(channel, LINKSET_BUTTON_COUNT_SUFFIX);
+    integer button_count = (integer)llLinksetDataRead(count_key);
+    integer idx;
+    while (idx < button_count)
+    {
+        llLinksetDataDelete(build_channel_key(channel, LINKSET_BUTTON_PREFIX + (string)idx));
+        idx++;
+    }
+    if (button_count)
+    {
+        LinksetDataLog("Cleared " + (string)button_count + " button entries for channel " + (string)channel);
+    }
+    llLinksetDataDelete(count_key);
+    count_key = build_channel_key(channel, LINKSET_POS_COUNT_SUFFIX);
+    integer pos_count = (integer)llLinksetDataRead(count_key);
+    idx = 0;
+    while (idx < pos_count)
+    {
+        llLinksetDataDelete(build_channel_key(channel, LINKSET_POS_PREFIX + (string)idx));
+        idx++;
+    }
+    if (pos_count)
+    {
+        LinksetDataLog("Cleared " + (string)pos_count + " position entries for channel " + (string)channel);
+    }
+    llLinksetDataDelete(count_key);
+    llLinksetDataDelete(build_channel_key(channel, LINKSET_SITTER_SUFFIX));
+}
+
+clear_linkset_data()
+{
+    string globals = llLinksetDataRead(LINKSET_GLOBAL_LIST_KEY);
+    while (globals != "")
+    {
+        integer split = llSubStringIndex(globals, "|");
+        string field;
+        if (split == -1)
+        {
+            field = globals;
+            globals = "";
+        }
+        else
+        {
+            field = llGetSubString(globals, 0, split - 1);
+            globals = llGetSubString(globals, split + 1, -1);
+        }
+        if (field != "")
+        {
+            llLinksetDataDelete(LINKSET_GLOBAL_PREFIX + field);
+            LinksetDataLog("Cleared global " + field);
+        }
+    }
+    llLinksetDataDelete(LINKSET_GLOBAL_LIST_KEY);
+    string channels = llLinksetDataRead(LINKSET_CHANNEL_LIST_KEY);
+    while (channels != "")
+    {
+        integer split = llSubStringIndex(channels, "|");
+        string token;
+        if (split == -1)
+        {
+            token = channels;
+            channels = "";
+        }
+        else
+        {
+            token = llGetSubString(channels, 0, split - 1);
+            channels = llGetSubString(channels, split + 1, -1);
+        }
+        if (token != "")
+        {
+            integer channel = (integer)token;
+            clear_channel_entries(channel);
+        }
+    }
+    llLinksetDataDelete(LINKSET_CHANNEL_LIST_KEY);
+    LinksetDataLog("Linkset data cleared");
 }
 
 dump_linkset_data()
 {
-    string raw_count = llLinksetDataRead(LINKSET_REGISTRY_COUNT_KEY);
-    if (raw_count == "")
-    {
-        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
-        return;
-    }
-    integer count = (integer)raw_count;
-    integer index;
+    string globals = llLinksetDataRead(LINKSET_GLOBAL_LIST_KEY);
     integer found;
-    while (index < count)
+    while (globals != "")
     {
-        string entry_key = build_registry_entry_key(index);
-        string key_name = llLinksetDataRead(entry_key);
-        if (key_name != "")
+        integer split = llSubStringIndex(globals, "|");
+        string field;
+        if (split == -1)
         {
-            string value = llLinksetDataRead(key_name);
-            llOwnerSay(llGetScriptName() + "[LSData] " + key_name + " = " + value);
+            field = globals;
+            globals = "";
+        }
+        else
+        {
+            field = llGetSubString(globals, 0, split - 1);
+            globals = llGetSubString(globals, split + 1, -1);
+        }
+        if (field != "")
+        {
+            llOwnerSay(llGetScriptName() + "[LSData] " + field + " = " + llLinksetDataRead(LINKSET_GLOBAL_PREFIX + field));
             found = TRUE;
         }
-        index++;
+    }
+    string channels = llLinksetDataRead(LINKSET_CHANNEL_LIST_KEY);
+    while (channels != "")
+    {
+        integer split = llSubStringIndex(channels, "|");
+        string token;
+        if (split == -1)
+        {
+            token = channels;
+            channels = "";
+        }
+        else
+        {
+            token = llGetSubString(channels, 0, split - 1);
+            channels = llGetSubString(channels, split + 1, -1);
+        }
+        if (token != "")
+        {
+            integer channel = (integer)token;
+            string label = build_channel_key(channel, LINKSET_SITTER_SUFFIX);
+            string sitter_info = llLinksetDataRead(label);
+            if (sitter_info != "")
+            {
+                llOwnerSay(llGetScriptName() + "[LSData] SITTER " + (string)channel + " -> " + sitter_info);
+                found = TRUE;
+            }
+            string count_key = build_channel_key(channel, LINKSET_BUTTON_COUNT_SUFFIX);
+            integer button_count = (integer)llLinksetDataRead(count_key);
+            integer idx;
+            while (idx < button_count)
+            {
+                string entry = llLinksetDataRead(build_channel_key(channel, LINKSET_BUTTON_PREFIX + (string)idx));
+                llOwnerSay(llGetScriptName() + "[LSData] BUTTON " + (string)channel + "#" + (string)idx + " = " + entry);
+                idx++;
+                found = TRUE;
+            }
+            count_key = build_channel_key(channel, LINKSET_POS_COUNT_SUFFIX);
+            integer pos_count = (integer)llLinksetDataRead(count_key);
+            idx = 0;
+            while (idx < pos_count)
+            {
+                string entry = llLinksetDataRead(build_channel_key(channel, LINKSET_POS_PREFIX + (string)idx));
+                llOwnerSay(llGetScriptName() + "[LSData] POS " + (string)channel + "#" + (string)idx + " = " + entry);
+                idx++;
+                found = TRUE;
+            }
+        }
     }
     if (!found)
     {
         llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
     }
-}
-
-request_linkset_data_clear()
-{
-    LinksetDataLog("Requesting linkset data clear.");
-    llMessageLinked(LINK_SET, MSG_CLEAR_LINKSET_DATA, "", "");
 }
 
 list order_buttons(list buttons)
@@ -319,8 +517,8 @@ default
     state_entry()
     {
         memory();
+        clear_linkset_data();
         SCRIPT_CHANNEL = (integer)llGetSubString(llGetScriptName(), llSubStringIndex(llGetScriptName(), " "), 99999);
-        request_linkset_data_clear();
         if (SCRIPT_CHANNEL)
             main_script += " " + (string)SCRIPT_CHANNEL;
         if (llGetInventoryType(main_script) == INVENTORY_SCRIPT)
@@ -477,11 +675,48 @@ default
         integer two = (integer)((string)id);
         integer index;
         list data;
-        if (num == MSG_CLEAR_LINKSET_DATA)
+        if (num == MSG_LINKSET_CLEAR)
         {
+            clear_linkset_data();
             return;
         }
-        if (num == MSG_DEBUG_LINKSET_DATA)
+        if (num == MSG_LINKSET_STORE_GLOBAL)
+        {
+            list payload = llParseStringKeepNulls(msg, [LINKSET_MESSAGE_SEPARATOR], []);
+            if (llGetListLength(payload) >= 2)
+            {
+                store_linkset_global(llList2String(payload, 0), llList2String(payload, 1));
+            }
+            return;
+        }
+        if (num == MSG_LINKSET_STORE_SITTER)
+        {
+            list payload = llParseStringKeepNulls(msg, [LINKSET_MESSAGE_SEPARATOR], []);
+            if (llGetListLength(payload) >= 2)
+            {
+                store_linkset_sitter((integer)llList2String(payload, 0), llList2String(payload, 1));
+            }
+            return;
+        }
+        if (num == MSG_LINKSET_STORE_BUTTON)
+        {
+            list payload = llParseStringKeepNulls(msg, [LINKSET_MESSAGE_SEPARATOR], []);
+            if (llGetListLength(payload) >= 4)
+            {
+                store_linkset_button((integer)llList2String(payload, 0), llList2String(payload, 1), llList2String(payload, 2), llList2String(payload, 3));
+            }
+            return;
+        }
+        if (num == MSG_LINKSET_STORE_POSITION)
+        {
+            list payload = llParseStringKeepNulls(msg, [LINKSET_MESSAGE_SEPARATOR], []);
+            if (llGetListLength(payload) >= 4)
+            {
+                store_linkset_position((integer)llList2String(payload, 0), llList2String(payload, 1), llList2String(payload, 2), llList2String(payload, 3));
+            }
+            return;
+        }
+        if (num == MSG_LINKSET_DEBUG_DUMP)
         {
             dump_linkset_data();
             return;
