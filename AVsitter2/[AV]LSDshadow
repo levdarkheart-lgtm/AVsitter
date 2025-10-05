@@ -1,0 +1,141 @@
+// --------------- [AV]LSDshadow (helper) ---------------
+// Writes a namespaced shadow copy of AVpos parse data into Linkset Data.
+// Receives messages from [AV]sitA and offers DUMP/PURGE/DEBUG controls.
+//
+// Protocol (num=928320):
+//   "RESET"
+//   "SET|<setnum>"
+//   "POSE|<sitter>|<P|Y>|<PoseNameFull>|<SequenceString>"
+//   "POS|<sitter>|<PoseName>|<pos>|<rot>"
+//
+// Debug (num=928321):
+//   "DUMP" | "PURGE" | "DEBUG 0|1"
+
+integer CH_WRITE = 928320;
+integer CH_DEBUG = 928321;
+
+string NS = "AVS2:AVPOS:"; // namespace prefix (won’t touch other data)
+integer VERBOSE = TRUE;
+integer MAX_DUMP = 64;
+
+integer w(string k, string v)
+{
+    integer before = llLinksetDataAvailable();
+    integer rc = llLinksetDataWrite(k, v);
+    if (VERBOSE)
+    {
+        integer after = llLinksetDataAvailable();
+        llOwnerSay("[AVP-LSD] " + k + " Δ=" + (string)(before - after) + " free=" + (string)after);
+    }
+    return rc;
+}
+
+string KSet()                         { return NS + "SET"; }
+string KType(integer s, string name)  { return NS + "S" + (string)s + ":T:" + name; }
+string KSeq(integer s, string t, string name) { return NS + "S" + (string)s + ":" + t + ":" + name + ":seq"; }
+string KPos(integer s, string t, string name) { return NS + "S" + (string)s + ":" + t + ":" + name + ":p"; }
+string KRot(integer s, string t, string name) { return NS + "S" + (string)s + ":" + t + ":" + name + ":r"; }
+
+integer purge()
+{
+    list keys = llLinksetDataFindKeys("^" + NS, 0, -1);
+    integer i = 0;
+    integer n = llGetListLength(keys);
+    while (i < n)
+    {
+        llLinksetDataDelete(llList2String(keys, i));
+        i += 1;
+    }
+    return n;
+}
+
+integer dump()
+{
+    list keys = llLinksetDataFindKeys("^" + NS, 0, MAX_DUMP);
+    integer n = llGetListLength(keys);
+    llOwnerSay("[AVP-LSD] dump: " + (string)n + " keys (showing up to " + (string)MAX_DUMP + "), free=" + (string)llLinksetDataAvailable());
+    integer i = 0;
+    while (i < n)
+    {
+        string k = llList2String(keys, i);
+        llOwnerSay("[AVP-LSD] " + k + " = " + llLinksetDataRead(k));
+        i += 1;
+    }
+    return n;
+}
+
+default
+{
+    state_entry() { }
+
+    link_message(integer sender, integer num, string msg, key id)
+    {
+        if (num == CH_DEBUG)
+        {
+            if (msg == "DUMP")
+            {
+                dump();
+                return;
+            }
+            if (msg == "PURGE")
+            {
+                integer d = purge();
+                llOwnerSay("[AVP-LSD] purged " + (string)d + " keys; free=" + (string)llLinksetDataAvailable());
+                return;
+            }
+            if (llGetSubString(msg, 0, 5) == "DEBUG ")
+            {
+                VERBOSE = (integer)llGetSubString(msg, 6, -1);
+                llOwnerSay("[AVP-LSD] verbose=" + (string)VERBOSE);
+                return;
+            }
+        }
+
+        if (num == CH_WRITE)
+        {
+            if (msg == "RESET")
+            {
+                integer d = purge();
+                if (VERBOSE) llOwnerSay("[AVP-LSD] reset; purged " + (string)d + " keys; free=" + (string)llLinksetDataAvailable());
+                return;
+            }
+
+            list p = llParseStringKeepNulls(msg, ["|"], []);
+            string op = llList2String(p, 0);
+
+            if (op == "SET")
+            {
+                w(KSet(), llList2String(p, 1));
+                return;
+            }
+
+            if (op == "POSE")
+            {
+                integer s   = (integer)llList2String(p, 1);
+                string kind = llList2String(p, 2); // "P" or "Y"
+                string name = llList2String(p, 3);
+                string seq  = llList2String(p, 4);
+
+                w(KType(s, name), kind);
+                w(KSeq(s, kind, name), seq);
+                return;
+            }
+
+            if (op == "POS")
+            {
+                integer s   = (integer)llList2String(p, 1);
+                string name = llList2String(p, 2);
+                string pos  = llList2String(p, 3);
+                string rot  = llList2String(p, 4);
+
+                string kind = llLinksetDataRead(KType(s, name));
+                if (kind == "") kind = "P";
+
+                w(KPos(s, kind, name), pos);
+                w(KRot(s, kind, name), rot);
+                return;
+            }
+        }
+    }
+}
+// --------------- end [AV]LSDshadow ---------------
