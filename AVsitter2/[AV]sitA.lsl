@@ -88,6 +88,15 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
+string LINKSET_DATA_PREFIX = "avsitter_avpos:";
+string LINKSET_MASTER_KEY = "avsitter_avpos:keys";
+integer MSG_DEBUG_LINKSET_DATA = 90350;
+integer MSG_CLEAR_LINKSET_DATA = 90351;
+integer linkset_debug_enabled = TRUE;
+list linkset_registered_keys;
+list linkset_button_counters;
+list linkset_position_counters;
+
 integer NOTECARD_TARGET_BROADCAST = -1;
 integer notecard_section_channel = -1;
 
@@ -102,6 +111,158 @@ Out(integer level, string out)
     if (verbose >= level)
     {
         llOwnerSay(llGetScriptName() + "[" + version + "] " + out);
+    }
+}
+
+LinksetDataLog(string message)
+{
+    if (linkset_debug_enabled)
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] " + message);
+    }
+}
+
+register_linkset_key(string key_name)
+{
+    if (llListFindList(linkset_registered_keys, [key_name]) == -1)
+    {
+        linkset_registered_keys += key_name;
+        llLinksetDataWrite(LINKSET_MASTER_KEY, llDumpList2String(linkset_registered_keys, "|"));
+        LinksetDataLog("Registered key " + key_name);
+    }
+}
+
+store_linkset_value(string key_name, string value)
+{
+    register_linkset_key(key_name);
+    integer result = llLinksetDataWrite(key_name, value);
+    LinksetDataLog("Stored " + key_name + " -> " + value + " (result " + (string)result + ")");
+}
+
+initialize_linkset_data_storage()
+{
+    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
+    if (serialized != "")
+    {
+        list keys = llParseStringKeepNulls(serialized, ["|"], []);
+        integer length = llGetListLength(keys);
+        integer index;
+        while (index < length)
+        {
+            string key_name = llList2String(keys, index);
+            if (key_name != "")
+            {
+                llLinksetDataDelete(key_name);
+                LinksetDataLog("Cleared key " + key_name);
+            }
+            index++;
+        }
+    }
+    llLinksetDataDelete(LINKSET_MASTER_KEY);
+    linkset_registered_keys = [];
+    linkset_button_counters = [];
+    linkset_position_counters = [];
+    LinksetDataLog("Linkset data storage initialized.");
+}
+
+store_global_linkset_value(string field, string value)
+{
+    store_linkset_value(LINKSET_DATA_PREFIX + "global:" + field, value);
+}
+
+store_initial_linkset_metadata()
+{
+    store_global_linkset_value("SCRIPT_CHANNEL", (string)SCRIPT_CHANNEL);
+    store_global_linkset_value("SCRIPT_NAME", llGetScriptName());
+    store_global_linkset_value("VERSION", version);
+    store_global_linkset_value("NOTECARD_NAME", notecard_name);
+    store_global_linkset_value("MEMORY_SCRIPT", memoryscript);
+}
+
+integer get_next_button_index(integer channel)
+{
+    integer length = llGetListLength(linkset_button_counters);
+    integer idx;
+    while (idx < length)
+    {
+        if ((integer)llList2Integer(linkset_button_counters, idx) == channel)
+        {
+            integer count = llList2Integer(linkset_button_counters, idx + 1);
+            linkset_button_counters = llListReplaceList(linkset_button_counters, [channel, count + 1], idx, idx + 1);
+            return count;
+        }
+        idx += 2;
+    }
+    linkset_button_counters += channel;
+    linkset_button_counters += 1;
+    return 0;
+}
+
+integer get_next_position_index(integer channel)
+{
+    integer length = llGetListLength(linkset_position_counters);
+    integer idx;
+    while (idx < length)
+    {
+        if ((integer)llList2Integer(linkset_position_counters, idx) == channel)
+        {
+            integer count = llList2Integer(linkset_position_counters, idx + 1);
+            linkset_position_counters = llListReplaceList(linkset_position_counters, [channel, count + 1], idx, idx + 1);
+            return count;
+        }
+        idx += 2;
+    }
+    linkset_position_counters += channel;
+    linkset_position_counters += 1;
+    return 0;
+}
+
+store_channel_counter(integer channel, string type_name, integer count)
+{
+    store_linkset_value(LINKSET_DATA_PREFIX + "channel:" + (string)channel + ":" + type_name + "_count", (string)count);
+}
+
+store_button_entry(integer channel, string entry_type, string label, string data)
+{
+    integer index = get_next_button_index(channel);
+    string key_name = LINKSET_DATA_PREFIX + "channel:" + (string)channel + ":button:" + (string)index;
+    store_linkset_value(key_name, entry_type + "|" + label + "|" + data);
+    store_channel_counter(channel, "button", index + 1);
+}
+
+store_position_entry(integer channel, string pose_name, string pos, string rot)
+{
+    integer index = get_next_position_index(channel);
+    string key_name = LINKSET_DATA_PREFIX + "channel:" + (string)channel + ":pos:" + (string)index;
+    store_linkset_value(key_name, pose_name + "|" + pos + "|" + rot);
+    store_channel_counter(channel, "pos", index + 1);
+}
+
+dump_linkset_data()
+{
+    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
+    if (serialized == "")
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
+        return;
+    }
+    list keys = llParseStringKeepNulls(serialized, ["|"], []);
+    integer length = llGetListLength(keys);
+    if (length == 1 && llList2String(keys, 0) == "")
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
+        return;
+    }
+    integer index;
+    while (index < length)
+    {
+        string key_name = llList2String(keys, index);
+        if (key_name != "")
+        {
+            string value = llLinksetDataRead(key_name);
+            llOwnerSay(llGetScriptName() + "[LSData] " + key_name + " = " + value);
+        }
+        index++;
     }
 }
 
@@ -221,6 +382,7 @@ integer process_notecard_line(string raw_data)
     if (command == "SITTER")
     {
         reading_notecard_section = FALSE;
+        store_global_linkset_value("SECTION_CHANNEL", (string)notecard_section_channel);
         if (llList2String(parts, 2) == "M")
         {
             GENDERS += 1;
@@ -233,12 +395,15 @@ integer process_notecard_line(string raw_data)
         {
             GENDERS += -1;
         }
+        store_global_linkset_value("GENDERS", llDumpList2String(GENDERS, SEP));
+        store_linkset_value(LINKSET_DATA_PREFIX + "sitter:" + part0, llDumpList2String(parts, SEP));
         if ((integer)part0 == SCRIPT_CHANNEL)
         {
             reading_notecard_section = TRUE;
             if (llGetListLength(parts) > 1)
             {
                 SITTER_INFO = llList2List(parts, 1, 99999);
+                store_global_linkset_value("SITTER_INFO", llDumpList2String(SITTER_INFO, SEP));
             }
         }
         return forward_target;
@@ -251,81 +416,97 @@ integer process_notecard_line(string raw_data)
         {
             llPassTouches(TRUE);
         }
+        store_global_linkset_value("MTYPE", (string)MTYPE);
         return forward_target;
     }
     if (command == "ROLES")
     {
         RLVDesignations = (string)parts;
+        store_global_linkset_value("ROLES", llDumpList2String(parts, SEP));
         return forward_target;
     }
     if (command == "ETYPE")
     {
         ETYPE = (integer)part0;
+        store_global_linkset_value("ETYPE", (string)ETYPE);
         return forward_target;
     }
     if (command == "SELECT")
     {
         SELECT = (integer)part0;
+        store_global_linkset_value("SELECT", (string)SELECT);
         return forward_target;
     }
     if (command == "WARN")
     {
         WARN = (integer)part0;
+        store_global_linkset_value("WARN", (string)WARN);
         return forward_target;
     }
     if (command == "TEXT")
     {
         CUSTOM_TEXT = llDumpList2String(llParseStringKeepNulls(part0, ["\\n"], []), "\n");
+        store_global_linkset_value("TEXT", CUSTOM_TEXT);
         return forward_target;
     }
     if (command == "SWAP")
     {
         SWAP = (integer)part0;
+        store_global_linkset_value("SWAP", (string)SWAP);
         return forward_target;
     }
     if (command == "AMENU")
     {
         AMENU = (integer)part0;
+        store_global_linkset_value("AMENU", (string)AMENU);
         return forward_target;
     }
     if (command == "HELPER")
     {
         OLD_HELPER_METHOD = (integer)part0;
+        store_global_linkset_value("HELPER", (string)OLD_HELPER_METHOD);
         return forward_target;
     }
     if (command == "SET")
     {
         SET = (integer)part0;
+        store_global_linkset_value("SET", (string)SET);
         return forward_target;
     }
     if (command == "KFM")
     {
         HASKEYFRAME = (integer)part0;
+        store_global_linkset_value("KFM", (string)HASKEYFRAME);
         return forward_target;
     }
     if (command == "LROT")
     {
         REFERENCE = (integer)part0;
+        store_global_linkset_value("LROT", (string)REFERENCE);
         return forward_target;
     }
     if (command == "BRAND")
     {
         BRAND = part0;
+        store_global_linkset_value("BRAND", BRAND);
         return forward_target;
     }
     if (command == "DFLT")
     {
         DFLT = (integer)part0;
+        store_global_linkset_value("DFLT", (string)DFLT);
         return forward_target;
     }
     if (command == "ONSIT")
     {
         onSit = part0;
+        store_global_linkset_value("ONSIT", onSit);
         return forward_target;
     }
     if (command == "ADJUST")
     {
         ADJUST_MENU = parts;
+        store_global_linkset_value("ADJUST", llDumpList2String(parts, SEP));
         return forward_target;
     }
     if (reading_notecard_section)
@@ -360,6 +541,7 @@ integer process_notecard_line(string raw_data)
                                     FIRST_ROTATION = DEFAULT_ROTATION = CURRENT_ROTATION = (vector)rot;
                                 }
                                 llMessageLinked(LINK_THIS, 90301, (string)SCRIPT_CHANNEL, command + "|" + pos + "|" + rot); // 90301=send update to AVsitB
+                                store_position_entry(SCRIPT_CHANNEL, command, pos, rot);
                             }
                         }
                     }
@@ -409,6 +591,7 @@ integer process_notecard_line(string raw_data)
                     part1 = "90200"; // default to rez prop
                 }
                 llMessageLinked(LINK_THIS, 90300, (string)SCRIPT_CHANNEL, part0 + "|" + part1); // 90300=update AVsitB
+                store_button_entry(SCRIPT_CHANNEL, command, part0, part1);
             }
         }
     }
@@ -422,6 +605,21 @@ finalize_notecard_loading()
         return;
     }
     notecard_finalized = TRUE;
+    store_global_linkset_value("NOTECARD_FINALIZED", (string)notecard_finalized);
+    store_global_linkset_value("FIRST_POSENAME", FIRST_POSENAME);
+    store_global_linkset_value("FIRST_ANIMATION_SEQUENCE", FIRST_ANIMATION_SEQUENCE);
+    store_global_linkset_value("FIRST_POSITION", (string)FIRST_POSITION);
+    store_global_linkset_value("FIRST_ROTATION", (string)FIRST_ROTATION);
+    store_global_linkset_value("DEFAULT_POSITION", (string)DEFAULT_POSITION);
+    store_global_linkset_value("DEFAULT_ROTATION", (string)DEFAULT_ROTATION);
+    store_global_linkset_value("CURRENT_POSE_NAME", CURRENT_POSE_NAME);
+    store_global_linkset_value("CURRENT_ANIMATION_SEQUENCE", CURRENT_ANIMATION_SEQUENCE);
+    store_global_linkset_value("MALE_POSENAME", MALE_POSENAME);
+    store_global_linkset_value("FEMALE_POSENAME", FEMALE_POSENAME);
+    store_global_linkset_value("FIRST_MALE_ANIMATION_SEQUENCE", FIRST_MALE_ANIMATION_SEQUENCE);
+    store_global_linkset_value("FIRST_FEMALE_ANIMATION_SEQUENCE", FIRST_FEMALE_ANIMATION_SEQUENCE);
+    store_global_linkset_value("GENDERS", llDumpList2String(GENDERS, SEP));
+    store_global_linkset_value("SITTERS_COUNT", (string)llGetListLength(SITTERS));
     if (SCRIPT_CHANNEL)
     {
         sittargets();
@@ -812,6 +1010,7 @@ default
     state_entry()
     {
         SCRIPT_CHANNEL = (integer)llGetSubString(llGetScriptName(), llSubStringIndex(llGetScriptName(), " "), 99999);
+        initialize_linkset_data_storage();
         while (llGetInventoryType(memoryscript) != INVENTORY_SCRIPT)
         {
             llSleep(0.1);
@@ -853,6 +1052,7 @@ default
                 llSetText("Loading...", <1,1,0>, 1);
             }
         }
+        store_initial_linkset_metadata();
         notecard_key = llGetInventoryKey(notecard_name);
         llMessageLinked(LINK_THIS, 90299, (string)SCRIPT_CHANNEL, ""); // 90299=send Reset to AVsitB
         if (llGetInventoryType(notecard_name) == INVENTORY_NOTECARD)
@@ -1034,6 +1234,17 @@ default
         integer two = (integer)((string)id);
         integer target;
         list data;
+        if (num == MSG_CLEAR_LINKSET_DATA)
+        {
+            initialize_linkset_data_storage();
+            store_initial_linkset_metadata();
+            return;
+        }
+        if (num == MSG_DEBUG_LINKSET_DATA)
+        {
+            dump_linkset_data();
+            return;
+        }
         if (num == MSG_NOTECARD_LINE)
         {
             if (!is_notecard_loader && (two == NOTECARD_TARGET_BROADCAST || two == SCRIPT_CHANNEL))

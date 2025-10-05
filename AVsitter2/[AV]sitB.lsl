@@ -53,12 +53,59 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
+string LINKSET_MASTER_KEY = "avsitter_avpos:keys";
+integer MSG_DEBUG_LINKSET_DATA = 90350;
+integer MSG_CLEAR_LINKSET_DATA = 90351;
+integer linkset_debug_enabled = TRUE;
+
 Out(integer level, string out)
 {
     if (verbose >= level)
     {
         llOwnerSay(llGetScriptName() + "[" + version + "]:" + out);
     }
+}
+
+LinksetDataLog(string message)
+{
+    if (linkset_debug_enabled)
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] " + message);
+    }
+}
+
+dump_linkset_data()
+{
+    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
+    if (serialized == "")
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
+        return;
+    }
+    list keys = llParseStringKeepNulls(serialized, ["|"], []);
+    integer length = llGetListLength(keys);
+    if (length == 1 && llList2String(keys, 0) == "")
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
+        return;
+    }
+    integer index;
+    while (index < length)
+    {
+        string key_name = llList2String(keys, index);
+        if (key_name != "")
+        {
+            string value = llLinksetDataRead(key_name);
+            llOwnerSay(llGetScriptName() + "[LSData] " + key_name + " = " + value);
+        }
+        index++;
+    }
+}
+
+request_linkset_data_clear()
+{
+    LinksetDataLog("Requesting linkset data clear.");
+    llMessageLinked(LINK_SET, MSG_CLEAR_LINKSET_DATA, "", "");
 }
 
 list order_buttons(list buttons)
@@ -266,6 +313,7 @@ default
     {
         memory();
         SCRIPT_CHANNEL = (integer)llGetSubString(llGetScriptName(), llSubStringIndex(llGetScriptName(), " "), 99999);
+        request_linkset_data_clear();
         if (SCRIPT_CHANNEL)
             main_script += " " + (string)SCRIPT_CHANNEL;
         if (llGetInventoryType(main_script) == INVENTORY_SCRIPT)
@@ -422,6 +470,15 @@ default
         integer two = (integer)((string)id);
         integer index;
         list data;
+        if (num == MSG_CLEAR_LINKSET_DATA)
+        {
+            return;
+        }
+        if (num == MSG_DEBUG_LINKSET_DATA)
+        {
+            dump_linkset_data();
+            return;
+        }
         if (num == 90000 || num == 90010 || num == 90003 || num == 90008)
         {
             index = llListFindList(MENU_LIST, [msg]);
