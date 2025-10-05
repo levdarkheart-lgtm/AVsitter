@@ -53,7 +53,8 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
-string LINKSET_MASTER_KEY = "avsitter_avpos:keys";
+string LINKSET_REGISTRY_COUNT_KEY = "avsitter_avpos:registry_count";
+string LINKSET_REGISTRY_ENTRY_PREFIX = "avsitter_avpos:registry_entry:";
 integer MSG_DEBUG_LINKSET_DATA = 90350;
 integer MSG_CLEAR_LINKSET_DATA = 90351;
 integer linkset_debug_enabled = TRUE;
@@ -74,31 +75,37 @@ LinksetDataLog(string message)
     }
 }
 
+string build_registry_entry_key(integer index)
+{
+    return LINKSET_REGISTRY_ENTRY_PREFIX + (string)index;
+}
+
 dump_linkset_data()
 {
-    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
-    if (serialized == "")
+    string raw_count = llLinksetDataRead(LINKSET_REGISTRY_COUNT_KEY);
+    if (raw_count == "")
     {
         llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
         return;
     }
-    list keys = llParseStringKeepNulls(serialized, ["|"], []);
-    integer length = llGetListLength(keys);
-    if (length == 1 && llList2String(keys, 0) == "")
-    {
-        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
-        return;
-    }
+    integer count = (integer)raw_count;
     integer index;
-    while (index < length)
+    integer found;
+    while (index < count)
     {
-        string key_name = llList2String(keys, index);
+        string entry_key = build_registry_entry_key(index);
+        string key_name = llLinksetDataRead(entry_key);
         if (key_name != "")
         {
             string value = llLinksetDataRead(key_name);
             llOwnerSay(llGetScriptName() + "[LSData] " + key_name + " = " + value);
+            found = TRUE;
         }
         index++;
+    }
+    if (!found)
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
     }
 }
 

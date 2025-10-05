@@ -90,6 +90,9 @@ string SEP = "�"; // OSS::string SEP = "\x7F";
 
 string LINKSET_DATA_PREFIX = "avsitter_avpos:";
 string LINKSET_MASTER_KEY = "avsitter_avpos:keys";
+string LINKSET_REGISTRY_COUNT_KEY = "avsitter_avpos:registry_count";
+string LINKSET_REGISTRY_ENTRY_PREFIX = "avsitter_avpos:registry_entry:";
+string LINKSET_REGISTRY_FLAG_PREFIX = "avsitter_avpos:registry_flag:";
 integer MSG_DEBUG_LINKSET_DATA = 90350;
 integer MSG_CLEAR_LINKSET_DATA = 90351;
 integer linkset_debug_enabled = TRUE;
@@ -119,22 +122,35 @@ LinksetDataLog(string message)
     }
 }
 
-register_linkset_key(string key_name)
+string build_registry_entry_key(integer index)
 {
-    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
-    if (serialized == "")
+    return LINKSET_REGISTRY_ENTRY_PREFIX + (string)index;
+}
+
+string build_registry_flag_key(string key_name)
+{
+    return LINKSET_REGISTRY_FLAG_PREFIX + key_name;
+}
+
+integer register_linkset_key(string key_name)
+{
+    string flag_key = build_registry_flag_key(key_name);
+    if (llLinksetDataRead(flag_key) != "")
     {
-        llLinksetDataWrite(LINKSET_MASTER_KEY, key_name);
-        LinksetDataLog("Registered key " + key_name);
-        return;
+        return FALSE;
     }
-    string haystack = "|" + serialized + "|";
-    string needle = "|" + key_name + "|";
-    if (llSubStringIndex(haystack, needle) == -1)
+    string raw_count = llLinksetDataRead(LINKSET_REGISTRY_COUNT_KEY);
+    integer count = 0;
+    if (raw_count != "")
     {
-        llLinksetDataWrite(LINKSET_MASTER_KEY, serialized + "|" + key_name);
-        LinksetDataLog("Registered key " + key_name);
+        count = (integer)raw_count;
     }
+    string entry_key = build_registry_entry_key(count);
+    llLinksetDataWrite(entry_key, key_name);
+    llLinksetDataWrite(flag_key, "1");
+    llLinksetDataWrite(LINKSET_REGISTRY_COUNT_KEY, (string)(count + 1));
+    LinksetDataLog("Registered key " + key_name);
+    return TRUE;
 }
 
 store_linkset_value(string key_name, string value)
@@ -146,23 +162,60 @@ store_linkset_value(string key_name, string value)
 
 initialize_linkset_data_storage()
 {
-    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
-    if (serialized != "")
+    string legacy = llLinksetDataRead(LINKSET_MASTER_KEY);
+    while (legacy != "")
     {
-        list keys = llParseStringKeepNulls(serialized, ["|"], []);
-        integer length = llGetListLength(keys);
-        integer index;
-        while (index < length)
+        integer delimiter = llSubStringIndex(legacy, "|");
+        string legacy_key = "";
+        if (delimiter == -1)
         {
-            string key_name = llList2String(keys, index);
-            if (key_name != "")
+            legacy_key = legacy;
+            legacy = "";
+        }
+        else
+        {
+            if (delimiter > 0)
             {
-                llLinksetDataDelete(key_name);
-                LinksetDataLog("Cleared key " + key_name);
+                legacy_key = llGetSubString(legacy, 0, delimiter - 1);
             }
-            index++;
+            integer next_start = delimiter + 1;
+            integer legacy_length = llStringLength(legacy);
+            if (next_start < legacy_length)
+            {
+                legacy = llGetSubString(legacy, next_start, -1);
+            }
+            else
+            {
+                legacy = "";
+            }
+        }
+        if (legacy_key != "")
+        {
+            llLinksetDataDelete(legacy_key);
+            LinksetDataLog("Cleared legacy key " + legacy_key);
         }
     }
+    string raw_count = llLinksetDataRead(LINKSET_REGISTRY_COUNT_KEY);
+    integer count = 0;
+    if (raw_count != "")
+    {
+        count = (integer)raw_count;
+    }
+    integer index;
+    while (index < count)
+    {
+        string entry_key = build_registry_entry_key(index);
+        string key_name = llLinksetDataRead(entry_key);
+        if (key_name != "")
+        {
+            llLinksetDataDelete(key_name);
+            llLinksetDataDelete(build_registry_flag_key(key_name));
+            LinksetDataLog("Cleared key " + key_name);
+        }
+        llLinksetDataDelete(entry_key);
+        index++;
+    }
+    llLinksetDataDelete(LINKSET_REGISTRY_COUNT_KEY);
     llLinksetDataDelete(LINKSET_MASTER_KEY);
     LinksetDataLog("Linkset data storage initialized.");
 }
@@ -215,29 +268,30 @@ store_position_entry(integer channel, string pose_name, string pos, string rot)
 
 dump_linkset_data()
 {
-    string serialized = llLinksetDataRead(LINKSET_MASTER_KEY);
-    if (serialized == "")
+    string raw_count = llLinksetDataRead(LINKSET_REGISTRY_COUNT_KEY);
+    if (raw_count == "")
     {
         llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
         return;
     }
-    list keys = llParseStringKeepNulls(serialized, ["|"], []);
-    integer length = llGetListLength(keys);
-    if (length == 1 && llList2String(keys, 0) == "")
-    {
-        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
-        return;
-    }
+    integer count = (integer)raw_count;
     integer index;
-    while (index < length)
+    integer found;
+    while (index < count)
     {
-        string key_name = llList2String(keys, index);
+        string entry_key = build_registry_entry_key(index);
+        string key_name = llLinksetDataRead(entry_key);
         if (key_name != "")
         {
             string value = llLinksetDataRead(key_name);
             llOwnerSay(llGetScriptName() + "[LSData] " + key_name + " = " + value);
+            found = TRUE;
         }
         index++;
+    }
+    if (!found)
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
     }
 }
 
