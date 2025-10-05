@@ -53,12 +53,66 @@ integer speed_index;
 integer verbose = 0;
 string SEP = "�"; // OSS::string SEP = "\x7F";
 
+string LINKSET_REGISTRY_COUNT_KEY = "avsitter_avpos:registry_count";
+string LINKSET_REGISTRY_ENTRY_PREFIX = "avsitter_avpos:registry_entry:";
+integer MSG_DEBUG_LINKSET_DATA = 90350;
+integer MSG_CLEAR_LINKSET_DATA = 90351;
+integer linkset_debug_enabled = TRUE;
+
 Out(integer level, string out)
 {
     if (verbose >= level)
     {
         llOwnerSay(llGetScriptName() + "[" + version + "]:" + out);
     }
+}
+
+LinksetDataLog(string message)
+{
+    if (linkset_debug_enabled)
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] " + message);
+    }
+}
+
+string build_registry_entry_key(integer index)
+{
+    return LINKSET_REGISTRY_ENTRY_PREFIX + (string)index;
+}
+
+dump_linkset_data()
+{
+    string raw_count = llLinksetDataRead(LINKSET_REGISTRY_COUNT_KEY);
+    if (raw_count == "")
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
+        return;
+    }
+    integer count = (integer)raw_count;
+    integer index;
+    integer found;
+    while (index < count)
+    {
+        string entry_key = build_registry_entry_key(index);
+        string key_name = llLinksetDataRead(entry_key);
+        if (key_name != "")
+        {
+            string value = llLinksetDataRead(key_name);
+            llOwnerSay(llGetScriptName() + "[LSData] " + key_name + " = " + value);
+            found = TRUE;
+        }
+        index++;
+    }
+    if (!found)
+    {
+        llOwnerSay(llGetScriptName() + "[LSData] No stored linkset data.");
+    }
+}
+
+request_linkset_data_clear()
+{
+    LinksetDataLog("Requesting linkset data clear.");
+    llMessageLinked(LINK_SET, MSG_CLEAR_LINKSET_DATA, "", "");
 }
 
 list order_buttons(list buttons)
@@ -266,6 +320,7 @@ default
     {
         memory();
         SCRIPT_CHANNEL = (integer)llGetSubString(llGetScriptName(), llSubStringIndex(llGetScriptName(), " "), 99999);
+        request_linkset_data_clear();
         if (SCRIPT_CHANNEL)
             main_script += " " + (string)SCRIPT_CHANNEL;
         if (llGetInventoryType(main_script) == INVENTORY_SCRIPT)
@@ -422,6 +477,15 @@ default
         integer two = (integer)((string)id);
         integer index;
         list data;
+        if (num == MSG_CLEAR_LINKSET_DATA)
+        {
+            return;
+        }
+        if (num == MSG_DEBUG_LINKSET_DATA)
+        {
+            dump_linkset_data();
+            return;
+        }
         if (num == 90000 || num == 90010 || num == 90003 || num == 90008)
         {
             index = llListFindList(MENU_LIST, [msg]);
